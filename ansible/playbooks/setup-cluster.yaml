@@ -1,0 +1,54 @@
+---
+- name: Prepare all nodes with base packages
+  hosts: all
+  become: true
+  gather_facts: false
+  roles:
+    - common
+
+- name: Configure HAProxy load balancer
+  hosts: haproxy
+  become: true
+  roles:
+    - haproxy
+
+- name: Configure RKE2 masters
+  hosts: master
+  become: true
+  roles:
+    - master
+
+- name: Configure RKE2 workers
+  hosts: worker
+  become: true
+  roles:
+    - worker
+
+- name: Verify cluster node registration
+  hosts: master[0]
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Wait for cluster to become ready
+      shell: |
+        export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+        for i in {1..30}; do
+          /var/lib/rancher/rke2/bin/kubectl get nodes && exit 0
+          echo "Waiting for cluster to become ready..."
+          sleep 10
+        done
+        exit 1
+      register: kube_check
+      changed_when: false
+      failed_when: kube_check.rc != 0
+
+    - name: Display cluster nodes
+      shell: |
+        export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
+        /var/lib/rancher/rke2/bin/kubectl get nodes -o wide
+      register: nodes_output
+      changed_when: false
+
+    - debug:
+        msg: "{{ nodes_output.stdout_lines }}"
+

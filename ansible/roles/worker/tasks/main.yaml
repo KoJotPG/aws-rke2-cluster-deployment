@@ -1,0 +1,70 @@
+---
+- set_fact:
+    lb_address: "{{ hostvars[groups['haproxy'][0]]['private_ip'] }}"
+
+- name: Wait for token to exist on first master
+  wait_for:
+    path: /var/lib/rancher/rke2/server/token
+    timeout: 180
+  delegate_to: "{{ groups['master'][0] }}"
+  run_once: true
+
+- name: Fetch cluster token from first master
+  fetch:
+    src: /var/lib/rancher/rke2/server/token
+    dest: /tmp/rke2_token
+    flat: yes
+  delegate_to: "{{ groups['master'][0] }}"
+  run_once: true
+
+- name: Ensure RKE2 directory exists on worker
+  file:
+    path: /var/lib/rancher/rke2/server
+    state: directory
+    mode: '0755'
+
+- name: Copy token to worker node
+  copy:
+    src: /tmp/rke2_token
+    dest: /var/lib/rancher/rke2/server/token
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Install RKE2 agent
+  shell: |
+    curl -sfL https://get.rke2.io | INSTALL_RKE2_TYPE="agent" sh -
+
+- name: Enable RKE2 agent
+  shell: |
+    systemctl enable rke2-agent.service
+
+- name: Create RKE2 config directory
+  file:
+    path: /etc/rancher/rke2
+    state: directory
+
+- name: Write RKE2 agent config (connect via HAProxy)
+  copy:
+    dest: /etc/rancher/rke2/config.yaml
+    content: |
+      server: https://{{ lb_address }}:9345
+      token-file: /var/lib/rancher/rke2/server/token
+      node-name: "{{ inventory_hostname }}"
+      tls-san:
+        - {{ lb_address }}
+
+- name: Start RKE2 agent
+  shell: |
+    systemctl restart rke2-agent.service
+
+- name: Wait for node to register in cluster
+  shell: |
+    /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml get nodes | grep "{{ inventory_hostname }}"
+  delegate_to: "{{ groups['master'][0] }}"
+  register: node_check
+  retries: 30
+  delay: 10
+  until: node_check.rc == 0
+  ignore_errors: yes
+

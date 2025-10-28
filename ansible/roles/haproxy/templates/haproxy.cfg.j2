@@ -1,0 +1,79 @@
+global
+    log /dev/log local0
+    maxconn 4096
+    daemon
+
+defaults
+    log global
+    mode http
+    option httplog
+    option forwardfor
+    timeout connect 10s
+    timeout client  1m
+    timeout server  1m
+
+# =====================
+# HTTP Frontend/Backend
+# =====================
+frontend http_front
+    bind *:80
+    default_backend workers_http
+
+backend workers_http
+    mode http
+    balance roundrobin
+{% for host in groups['worker'] %}
+    server worker{{ loop.index }} {{ hostvars[host].ansible_host | default(host) }}:80 check
+{% endfor %}
+
+
+# ======================
+# HTTPS Frontend/Backend
+# ======================
+frontend https_front
+    bind *:443
+    mode tcp
+    option tcplog
+    default_backend workers_https
+
+backend workers_https
+    mode tcp
+    balance roundrobin
+{% for host in groups['worker'] %}
+    server worker{{ loop.index }} {{ hostvars[host].ansible_host | default(host) }}:443 check
+{% endfor %}
+
+
+# ======================
+# Kubernetes API (6443)
+# ======================
+frontend k8s_api
+    bind *:6443
+    mode tcp
+    option tcplog
+    default_backend masters_6443
+
+backend masters_6443
+    mode tcp
+    balance roundrobin
+{% for host in groups['master'] %}
+    server master{{ loop.index }} {{ hostvars[host].ansible_host | default(host) }}:6443 check
+{% endfor %}
+
+
+# =========================
+# RKE2 Supervisor (9345)
+# =========================
+frontend rke2_supervisor
+    bind *:9345
+    mode tcp
+    option tcplog
+    default_backend masters_9345
+
+backend masters_9345
+    mode tcp
+    balance roundrobin
+{% for host in groups['master'] %}
+    server master{{ loop.index }} {{ hostvars[host].ansible_host | default(host) }}:9345 check
+{% endfor %}
+

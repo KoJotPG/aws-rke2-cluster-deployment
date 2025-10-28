@@ -1,0 +1,32 @@
+---
+- name: Install HAProxy
+  apt:
+    name: haproxy
+    state: present
+    update_cache: yes
+
+- name: Enable and start HAProxy
+  service:
+    name: haproxy
+    state: started
+    enabled: true
+
+- name: Configure HAProxy for HTTP and HTTPS load balancing
+  template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Check HAProxy configuration syntax
+  command: haproxy -c -f /etc/haproxy/haproxy.cfg
+  register: haproxy_check
+  changed_when: false
+  failed_when: haproxy_check.rc != 0
+
+- name: Restart HAProxy to apply new configuration
+  service:
+    name: haproxy
+    state: restarted
+

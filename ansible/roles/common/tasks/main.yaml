@@ -1,0 +1,11 @@
+---
+- name: Update apt and install base packages
+  apt:
+    update_cache: yes
+    name:
+      - curl
+      - apt-transport-https
+      - ca-certificates
+      - software-properties-common
+    state: present
+
