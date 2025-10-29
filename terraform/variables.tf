@@ -34,7 +34,7 @@ variable "cluster_nodes" {
     "worker-2" = { role = "worker" },
     "worker-3" = { role = "worker" },
     "worker-4" = { role = "worker" },
-    "haproxy"  = { role = "haproxy" },
+    "haproxy"  = { role = "haproxy" }, # Don't add additional haproxy instances
   }
 }
 
